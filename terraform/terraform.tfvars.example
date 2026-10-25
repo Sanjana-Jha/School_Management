@@ -1,0 +1,34 @@
+# ==============================================================================
+# Terraform Variables Example for School-Management-System
+# Copy this file to terraform.tfvars and customize if needed:
+#   cp terraform.tfvars.example terraform.tfvars
+# ==============================================================================
+
+resource_group_name = "school-system"
+location            = "centralindia"   # Choose region: centralindia, eastus, westeurope, etc.
+environment         = "prod"
+project_name        = "school-sms"
+
+# AKS Worker Nodes Sizing
+node_vm_size        = "Standard_B2ms"  # 2 vCPU, 8 GB RAM (Cost effective)
+node_count          = 2
+node_count_min      = 1
+node_count_max      = 3
+
+# Container Registry
+acr_sku             = "Basic"
+
+# Database Configuration:
+# Set to 'false' to use In-Cluster MySQL StatefulSet (Recommended for Dev/Testing to save cost)
+# Set to 'true' to provision Azure Managed MySQL Flexible Server
+enable_azure_mysql  = false
+
+# If enable_azure_mysql = true, uncomment and set these:
+# mysql_admin_username = "sms_admin"
+# mysql_admin_password = "ChangeMeSecurePass123!"
+
+tags = {
+  Project     = "School-Management-System"
+  ManagedBy   = "Terraform"
+  Environment = "Production"
+}

@@ -1,0 +1,180 @@
+# ==============================================================================
+# Azure DevOps Pipeline: Infrastructure Provisioning (Terraform)
+# Project: School-Management-System (AKS, ACR, VNet, Ingress)
+# ==============================================================================
+
+name: $(Year:yy).$(Month).$(DayOfMonth).$(BuildID)-$(SourceBranchName)
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - terraform/**
+      - azure-pipelines.yml
+      - .azdo/**
+
+pr:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - terraform/**
+
+parameters:
+  - name: action
+    displayName: "Terraform Action"
+    type: string
+    default: "plan-and-apply"
+    values:
+      - "plan-and-apply"
+      - "plan-only"
+      - "destroy"
+
+variables:
+  - name: azureServiceConnection
+    value: 'azure-spn-aetherus'
+  - name: tfWorkingDir
+    value: '$(Build.SourcesDirectory)/terraform'
+  - name: backendRg
+    value: 'school-system'
+  - name: backendStorage
+    value: 'stschooltf57d61ejzqwxd'
+  - name: backendContainer
+    value: 'tfstate'
+  - name: backendKey
+    value: 'school-system.tfstate'
+
+pool:
+  name: 'chattel.pool'
+  # Agar chattel.pool offline ho toh uncomment karein:
+  # vmImage: 'ubuntu-latest'
+
+stages:
+  # ==========================================================================
+  # STAGE 1: TERRAFORM VALIDATE & PLAN
+  # ==========================================================================
+  - stage: Terraform_Plan
+    displayName: '1. Terraform Validate & Plan'
+    jobs:
+      - job: PlanJob
+        displayName: 'Validate & Generate Plan'
+        steps:
+          - checkout: self
+            clean: true
+
+          - powershell: |
+              $ErrorActionPreference = 'SilentlyContinue'
+              try { git config --global --unset-all http.extraheader 2>$null } catch {}
+              try { git config --system --unset-all http.extraheader 2>$null } catch {}
+              try { git config --global --remove-section credential 2>$null } catch {}
+              exit 0
+            displayName: 'Clean Agent Git Credentials'
+
+          # Check if Terraform is installed; if not, install it automatically
+          - powershell: |
+              if (-not (Get-Command terraform -ErrorAction SilentlyContinue)) {
+                  Write-Host "Terraform not found. Installing via winget/choco..." -ForegroundColor Yellow
+                  if (Get-Command choco -ErrorAction SilentlyContinue) {
+                      choco install terraform -y --no-progress
+                  } else {
+                      winget install --id Hashicorp.Terraform -e --silent --accept-source-agreements --accept-package-agreements
+                  }
+              }
+              terraform version
+            displayName: 'Verify / Install Terraform'
+
+          - task: AzureCLI@2
+            displayName: 'Terraform Init, Validate & Plan'
+            inputs:
+              azureSubscription: '$(azureServiceConnection)'
+              scriptType: 'ps'
+              scriptLocation: 'inlineScript'
+              workingDirectory: '$(tfWorkingDir)'
+              addSpnToEnvironment: true
+              inlineScript: |
+                $ErrorActionPreference = 'Stop'
+                Write-Host "==> Initializing Terraform with Azure Backend..." -ForegroundColor Cyan
+                
+                terraform init `
+                  "-backend-config=resource_group_name=$(backendRg)" `
+                  "-backend-config=storage_account_name=$(backendStorage)" `
+                  "-backend-config=container_name=$(backendContainer)" `
+                  "-backend-config=key=$(backendKey)" `
+                  -reconfigure
+
+                Write-Host "==> Checking Terraform Format..." -ForegroundColor Cyan
+                terraform fmt -check
+
+                Write-Host "==> Validating Configuration..." -ForegroundColor Cyan
+                terraform validate
+
+                Write-Host "==> Generating Execution Plan..." -ForegroundColor Cyan
+                if ('${{ parameters.action }}' -eq 'destroy') {
+                    terraform plan -destroy -out=tfplan
+                } else {
+                    terraform plan -out=tfplan
+                }
+
+          # Publish tfplan as Artifact for the Apply Stage
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publish tfplan Artifact'
+            inputs:
+              targetPath: '$(tfWorkingDir)/tfplan'
+              artifact: 'terraform-plan'
+              publishLocation: 'pipeline'
+
+  # ==========================================================================
+  # STAGE 2: TERRAFORM APPLY (Manual Approval Gate Enabled)
+  # ==========================================================================
+  - stage: Terraform_Apply
+    displayName: '2. Terraform Apply'
+    dependsOn: Terraform_Plan
+    condition: and(succeeded(), ne('${{ parameters.action }}', 'plan-only'), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - deployment: ApplyJob
+        displayName: 'Apply Infrastructure Changes'
+        environment: 'school-infra-prod' # Azure DevOps Environment with Approval Checks
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                  clean: true
+
+                - task: DownloadPipelineArtifact@2
+                  displayName: 'Download tfplan Artifact'
+                  inputs:
+                    buildType: 'current'
+                    artifactName: 'terraform-plan'
+                    targetPath: '$(tfWorkingDir)'
+
+                - task: AzureCLI@2
+                  displayName: 'Execute Terraform Apply'
+                  inputs:
+                    azureSubscription: '$(azureServiceConnection)'
+                    scriptType: 'ps'
+                    scriptLocation: 'inlineScript'
+                    workingDirectory: '$(tfWorkingDir)'
+                    addSpnToEnvironment: true
+                    inlineScript: |
+                      $ErrorActionPreference = 'Stop'
+                      Write-Host "==> Initializing Backend for Apply..." -ForegroundColor Cyan
+                      
+                      terraform init `
+                        "-backend-config=resource_group_name=$(backendRg)" `
+                        "-backend-config=storage_account_name=$(backendStorage)" `
+                        "-backend-config=container_name=$(backendContainer)" `
+                        "-backend-config=key=$(backendKey)" `
+                        -reconfigure
+
+                      Write-Host "==> Applying Terraform Plan..." -ForegroundColor Green
+                      terraform apply -auto-approve tfplan
+
+                      Write-Host "`n========================================================" -ForegroundColor Cyan
+                      Write-Host "  INFRASTRUCTURE PROVISIONED SUCCESSFULLY" -ForegroundColor Green
+                      Write-Host "========================================================`n" -ForegroundColor Cyan
+                      
+                      terraform output
