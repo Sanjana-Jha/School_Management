@@ -1,106 +1,80 @@
-# 1. Random suffix for globally unique resource names (ACR, Storage, etc.)
+# 1. Random suffix for globally unique resource names (ACR, Ingress DNS, MySQL)
 resource "random_string" "suffix" {
   length  = 6
   special = false
   upper   = false
 }
 
-# 2. Resource Group
+# 2. Primary Resource Group
 resource "azurerm_resource_group" "rg" {
   name     = var.resource_group_name
   location = var.location
   tags     = var.tags
 }
 
-# 3. Virtual Network & Subnets
-resource "azurerm_virtual_network" "vnet" {
-  name                = "${var.project_name}-vnet"
-  location            = azurerm_resource_group.rg.location
+# 3. Network Module (VNet, Subnets, NSG)
+module "network" {
+  source              = "./modules/network"
   resource_group_name = azurerm_resource_group.rg.name
-  address_space       = var.vnet_cidr
+  location            = azurerm_resource_group.rg.location
+  project_name        = var.project_name
+  vnet_cidr           = var.vnet_cidr
+  aks_subnet_cidr     = var.aks_subnet_cidr
   tags                = var.tags
 }
 
-resource "azurerm_subnet" "aks_subnet" {
-  name                 = "snet-aks-nodes"
+# 4. Monitoring Module (Log Analytics Workspace) - Commented out for now
+# module "monitoring" {
+#   source              = "./modules/monitoring"
+#   resource_group_name = azurerm_resource_group.rg.name
+#   location            = azurerm_resource_group.rg.location
+#   project_name        = var.project_name
+#   log_analytics_sku   = "PerGB2018"
+#   retention_in_days   = 30
+#   tags                = var.tags
+# }
+
+# 5. ACR Module (Azure Container Registry)
+module "acr" {
+  source              = "./modules/acr"
+  resource_group_name = azurerm_resource_group.rg.name
+  location            = azurerm_resource_group.rg.location
+  random_suffix       = random_string.suffix.result
+  acr_sku             = var.acr_sku
+  tags                = var.tags
+}
+
+# 6. AKS Module (Cluster, Managed Identities, Ingress Public IP, ACR Role Assignment, Container Insights)
+module "aks" {
+  source              = "./modules/aks"
+  resource_group_name = azurerm_resource_group.rg.name
+  resource_group_id   = azurerm_resource_group.rg.id
+  location            = azurerm_resource_group.rg.location
+  project_name        = var.project_name
+  random_suffix       = random_string.suffix.result
+  aks_subnet_id       = module.network.aks_subnet_id
+  # log_analytics_workspace_id = module.monitoring.workspace_id
+  acr_id             = module.acr.acr_id
+  kubernetes_version = var.kubernetes_version
+  node_vm_size       = var.node_vm_size
+  node_count         = var.node_count
+  node_count_min     = var.node_count_min
+  node_count_max     = var.node_count_max
+  tags               = var.tags
+}
+
+# 7. Database Module (Optional: Azure Database for MySQL Flexible Server)
+module "database" {
+  count                = var.enable_azure_mysql ? 1 : 0
+  source               = "./modules/database"
   resource_group_name  = azurerm_resource_group.rg.name
-  virtual_network_name = azurerm_virtual_network.vnet.name
-  address_prefixes     = var.aks_subnet_cidr
-
-  # Enable service endpoints for direct secure communication
-  service_endpoints = [
-    "Microsoft.Storage",
-    "Microsoft.ContainerRegistry",
-    "Microsoft.KeyVault"
-  ]
-}
-
-# 4. Network Security Group for AKS
-resource "azurerm_network_security_group" "aks_nsg" {
-  name                = "${var.project_name}-aks-nsg"
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
-  tags                = var.tags
-
-  # Allow HTTP Inbound
-  security_rule {
-    name                       = "Allow-HTTP-Inbound"
-    priority                   = 100
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "80"
-    source_address_prefix      = "*"
-    destination_address_prefix = "*"
-  }
-
-  # Allow HTTPS Inbound
-  security_rule {
-    name                       = "Allow-HTTPS-Inbound"
-    priority                   = 110
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "443"
-    source_address_prefix      = "*"
-    destination_address_prefix = "*"
-  }
-}
-
-resource "azurerm_subnet_network_security_group_association" "aks_nsg_assoc" {
-  subnet_id                 = azurerm_subnet.aks_subnet.id
-  network_security_group_id = azurerm_network_security_group.aks_nsg.id
-}
-
-# 5. Azure Container Registry (ACR)
-resource "azurerm_container_registry" "acr" {
-  name                = "acrschool${random_string.suffix.result}"
-  resource_group_name = azurerm_resource_group.rg.name
-  location            = azurerm_resource_group.rg.location
-  sku                 = var.acr_sku
-  admin_enabled       = true
-  tags                = var.tags
-}
-
-# 6. Log Analytics Workspace (for Container Insights)
-resource "azurerm_log_analytics_workspace" "log_analytics" {
-  name                = "${var.project_name}-law"
-  location            = azurerm_resource_group.rg.location
-  resource_group_name = azurerm_resource_group.rg.name
-  sku                 = "PerGB2018"
-  retention_in_days   = 30
-  tags                = var.tags
-}
-
-# 7. Static Public IP for NGINX Ingress Controller
-resource "azurerm_public_ip" "ingress_ip" {
-  name                = "${var.project_name}-ingress-pip"
-  resource_group_name = azurerm_resource_group.rg.name
-  location            = azurerm_resource_group.rg.location
-  allocation_method   = "Static"
-  sku                 = "Standard"
-  domain_name_label   = "school-sms-${random_string.suffix.result}"
-  tags                = var.tags
+  location             = azurerm_resource_group.rg.location
+  project_name         = var.project_name
+  random_suffix        = random_string.suffix.result
+  vnet_id              = module.network.vnet_id
+  vnet_name            = module.network.vnet_name
+  mysql_admin_username = var.mysql_admin_username
+  mysql_admin_password = var.mysql_admin_password
+  mysql_sku_name       = var.mysql_sku_name
+  tags                 = var.tags
 }
