@@ -48,8 +48,6 @@ variables:
 
 pool:
   name: 'chattel.pool'
-  # Agar chattel.pool offline ho toh uncomment karein:
-  # vmImage: 'ubuntu-latest'
 
 stages:
   # ==========================================================================
