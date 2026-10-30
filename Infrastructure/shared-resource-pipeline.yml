@@ -1,0 +1,61 @@
+#### Terraform Yaml for School Management System - Shared Resources (ACR & State)
+trigger:
+  branches:
+    include:
+      - master
+      - main
+      - feature/*
+      - release/*
+  paths:
+    include:
+      - Infrastructure/shared-resource/*
+
+pr:
+  branches:
+    include:
+      - master
+      - main
+
+name: $(Year:yy).$(Month).$(DayOfMonth).$(BuildID)-$(SourceBranchName)
+
+variables:
+  AgentImage: "windows-latest"
+  system.debug: true
+  buildReasonCondition: in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI', 'Manual')
+
+stages:
+############################################################
+- stage: shared_TFPLAN
+  displayName: shared_TFPLAN
+  condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+  jobs:
+  - template: ./tf-plan-template.yml
+    parameters:
+      environments: school-shared-env
+      ServiceConnection: azure-spn-aetherus
+      ResourceGroupName: school-shared-tfstate-rg
+      StorageAccountName: schoolsharedtfstate
+      ContainerName: tfstate
+      KeyName: shared.terraform.tfstate
+      ResourcePath: 'Infrastructure/shared-resource'
+      env: shared
+      AccountKey: $(accesskey)
+      variable_group: school-shared-vg
+
+- stage: shared_TFAPPLY
+  displayName: shared_TFAPPLY
+  condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+  dependsOn: ['shared_TFPLAN']
+  jobs:
+  - template: ./tf-apply-template.yml
+    parameters:
+      environments: school-shared-env
+      ServiceConnection: azure-spn-aetherus
+      ResourceGroupName: school-shared-tfstate-rg
+      StorageAccountName: schoolsharedtfstate
+      ContainerName: tfstate
+      KeyName: shared.terraform.tfstate
+      ResourcePath: 'Infrastructure/shared-resource'
+      env: shared
+      AccountKey: $(accesskey)
+      variable_group: school-shared-vg

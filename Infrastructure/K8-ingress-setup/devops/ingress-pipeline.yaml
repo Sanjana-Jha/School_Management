@@ -1,0 +1,52 @@
+### Ingress Pipeline for School Management System
+### Applies Ingress routing to AKS dev cluster
+trigger:
+  branches:
+    include:
+      - main
+      - master
+      - feature/*
+      - release/*
+  paths:
+    include:
+      - Infrastructure/K8-ingress-setup/**
+
+pr:
+  branches:
+    include:
+      - master
+      - main
+
+name: $(Year:yy).$(Month).$(DayOfMonth).$(BuildID)-$(SourceBranchName)
+
+variables:
+  AgentImage: "ubuntu-latest"
+  system.debug: true
+  ServiceConnection: 'azure-spn-aetherus' # or 'school-shared-resource'
+  ResourceGroup: 'school-dev-rg'
+  ClusterName: 'school-dev-aks'
+
+stages:
+- stage: Dev
+  displayName: Deploy Ingress to Dev
+  jobs:
+  - deployment: deploy_ingress_dev
+    displayName: Deploy Ingress Rules to Dev
+    pool:
+      vmImage: $(AgentImage)
+    environment: school-dev-env
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - checkout: self
+          - task: AzureCLI@2
+            displayName: 'Apply Ingress Rules'
+            inputs:
+              azureSubscription: $(ServiceConnection)
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                az aks get-credentials --resource-group $(ResourceGroup) --name $(ClusterName) --overwrite-existing
+                kubectl create namespace dev --dry-run=client -o yaml | kubectl apply -f -
+                kubectl apply -f "$(System.DefaultWorkingDirectory)/Infrastructure/K8-ingress-setup/school-ingress.yaml"

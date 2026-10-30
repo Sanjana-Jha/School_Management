@@ -1,0 +1,10 @@
+name                = "school"
+env                 = "dev"
+location            = "Central US"
+aks_node_count      = 1
+aks_vm_size         = "Standard_B2ms"
+aks_os_disk_size_gb = 30
+mysql_admin         = "schooladmin"
+mysql_sku           = "B_Standard_B1ms"
+mysql_version       = "8.0.21"
+mysql_database_name = "school_sms"

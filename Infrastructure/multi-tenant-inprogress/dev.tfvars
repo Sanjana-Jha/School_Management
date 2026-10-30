@@ -1,0 +1,13 @@
+resource_group_name  = "school-dev-rg"
+location             = "Central US"
+cluster_name         = "school-dev-aks"
+dns_prefix           = "school-dev-aks-dns"
+node_count           = 1
+vm_size              = "Standard_B2ms"
+os_disk_size_gb      = 30
+acr_name             = "schooldevacr01"
+mysql_server_name    = "school-dev-mysql"
+mysql_database_name  = "school_sms"
+mysql_admin_username = "schooladmin"
+storage_account_name = "schooldevstore01"
+container_name       = "school-media"

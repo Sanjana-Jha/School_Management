@@ -1,0 +1,153 @@
+parameters:
+- name: env
+  type: string
+- name: ServiceConnection
+  type: string
+- name: ResourceGroupName
+  type: string
+- name: StorageAccountName
+  type: string
+- name: ContainerName
+  type: string
+- name: KeyName
+  type: string
+- name: environments
+  type: string
+- name: ResourcePath
+  type: string
+- name: AccountKey
+  type: string
+- name: variable_group
+  type: string
+
+jobs:
+  - deployment: ${{ parameters.env }}_TF_PLAN
+    displayName: ${{ parameters.env }}_TF_PLAN
+    variables:
+    - group: ${{parameters.variable_group}}
+    pool:
+      name: 'chattel.pool'
+    environment: ${{ parameters.environments }}
+    strategy:
+        runOnce:
+          deploy:
+            steps:
+             - checkout: self
+
+            #  - powershell: |
+            #      (gci $(System.DefaultWorkingDirectory) -recurse).fullname
+            #      if (Test-Path $(System.DefaultWorkingDirectory)\terraform\imports${{ parameters.env}}tf) { Rename-Item $(System.DefaultWorkingDirectory)\terraform\imports${{ parameters.env}}tf -NewName "imports.tf" -Verbose }
+            #      if ( {{$parameters.env}} -eq 'prod'){ remove-item $(System.DefaultWorkingDirectory)\terraform\data.tf -Verbose }
+            #      if (Test-Path $(System.DefaultWorkingDirectory)\terraform\${{parameters.env}}datatf) { Rename-Item $(System.DefaultWorkingDirectory)\terraform\${{ parameters.env}}datatf -NewName "data.tf" -Verbose }
+             - task: qetza.replacetokens.replacetokens-task.replacetokens@3
+               displayName: 'Replace tokens in tfvars and tf'
+               inputs:
+                  rootDirectory: '$(System.DefaultWorkingDirectory)'
+                  targetFiles: |
+                   $(System.DefaultWorkingDirectory)\${{ parameters.ResourcePath }}\*.tf
+                   $(System.DefaultWorkingDirectory)\${{ parameters.ResourcePath }}\*.tfvars
+                  encoding: 'utf-8'
+                  actionOnMissing: 'warn'
+                  keepToken: false
+                  tokenPrefix: '__'
+                  tokenSuffix: '__'
+             - task: ms-devlabs.custom-terraform-tasks.custom-terraform-installer-task.TerraformInstaller@0
+               displayName: Install Terraform '1.15.8'
+               inputs:
+                 terraformVersion: '1.15.8'
+             - task: PowerShell@2
+               displayName: PowerShell Script
+               inputs:
+                 targetType: inline
+                 script: |
+                   # Write your PowerShell commands here.
+                   Write-Host "list of files"
+                   gci -rec  | select-object fullname
+             - task: TerraformTaskV4@4
+               displayName: 'Terraform : init'
+               inputs:
+                 command: 'init'
+                 workingDirectory: $(System.DefaultWorkingDirectory)/${{ parameters.ResourcePath }}
+                 backendServiceArm: ${{ parameters.ServiceConnection }}
+                 backendAzureRmResourceGroupName: ${{ parameters.ResourceGroupName }}
+                 backendAzureRmStorageAccountName: ${{ parameters.StorageAccountName }}
+                 backendAzureRmContainerName: ${{ parameters.ContainerName }}
+                 backendAzureRmKey: ${{ parameters.KeyName }}
+                 backendType: 'azurerm'
+
+             - task: PowerShell@2
+               displayName: 'List'
+               inputs:
+                 targetType: inline
+                 script: |
+                   # Write your PowerShell commands here.
+                   ### Create folder
+                   mkdir "$(System.DefaultWorkingDirectory)/${{ parameters.ResourcePath }}/plan"
+                   gci -rec  | select-object fullname
+             - task: ms-devlabs.custom-terraform-tasks.custom-terraform-release-task.TerraformTaskV2@2
+               displayName: 'Terraform : validate'
+               inputs:
+                 command: validate
+                 workingDirectory: $(System.DefaultWorkingDirectory)/${{ parameters.ResourcePath }}
+             - task: TerraformTaskV4@4
+               displayName: 'Terraform : plan'
+               inputs:
+                 command: plan
+                 workingDirectory: $(System.DefaultWorkingDirectory)/${{ parameters.ResourcePath }}
+                 commandOptions: -lock=false -var-file="${{ parameters.env }}.tfvars" -out="$(System.DefaultWorkingDirectory)/${{ parameters.ResourcePath }}/plan/${{ parameters.env }}.plan"
+                 environmentServiceNameAzureRM: ${{ parameters.ServiceConnection }}
+             # NOTE: Some lines in the output were missing while using this task.
+             # Write terraform show output in default format to a markdown file
+             - powershell: |
+                   copy-item -path $(System.DefaultWorkingDirectory)/${{ parameters.ResourcePath }}/plan/${{ parameters.env }}.plan -Destination $(System.DefaultWorkingDirectory)/${{ parameters.ResourcePath }}/ 
+             - task: TerraformTaskV4@4
+               name: TerraformShow
+               displayName: Terraform Show
+               inputs:
+                 provider: 'azurerm'
+                 environmentServiceNameAzureRM: ${{ parameters.ServiceConnection }}
+                 command: 'show'
+                 commandOptions: ${{ parameters.env }}.plan -no-color
+                 outputTo: 'file'
+                 outputFormat: 'default'
+                 fileName: '$(System.DefaultWorkingDirectory)/${{ parameters.ResourcePath }}/TerraformPlan.md'
+                 workingDirectory: $(System.DefaultWorkingDirectory)/${{ parameters.ResourcePath }}
+           
+             # Display plan in the pipeline build summary
+             - task: PowerShell@2
+               displayName: Show plan summary
+               inputs:
+                 targetType: 'inline'
+                 workingDirectory: '$(System.DefaultWorkingDirectory)/${{ parameters.ResourcePath }}'
+                 script: |
+                   $content = Get-Content -Path "TerraformPlan.md" -Raw -ErrorAction SilentlyContinue
+                   if ($null -ne $content) {
+                       $newContent = "``````text`n" + $content + "`n``````"
+                       Set-Content -Path "TerraformPlan.md" -Value $newContent
+                       Write-Host "##vso[task.uploadsummary]$(System.DefaultWorkingDirectory)/${{ parameters.ResourcePath }}/TerraformPlan.md"
+                   } else {
+                       Write-Warning "TerraformPlan.md not found or empty."
+                   }
+             - task: PowerShell@2
+               displayName: read powershell outplan
+               inputs:
+                 targetType: inline
+                 script: |+
+                   # Write your PowerShell commands here.
+                   Write-Host "list of files"
+                   gci -rec  | select-object fullname
+                   get-content "$(System.DefaultWorkingDirectory)/${{ parameters.ResourcePath }}/plan/${{ parameters.env }}.plan"
+            #  - task: AzureCLI@2
+            #    displayName: Azure push plan file to Storage account
+            #    inputs:
+            #      azureSubscription: ${{ parameters.ServiceConnection }}
+            #      scriptType: pscore
+            #      scriptLocation: inlineScript
+            #      inlineScript: |
+            #        az storage blob upload --file "$(System.DefaultWorkingDirectory)\${{ parameters.ResourcePath }}\plan\${{ parameters.env }}.plan" --container-name ${{ parameters.ContainerName }} --name "${{ parameters.env }}.plan" --account-name ${{ parameters.StorageAccountName }} --account-key ${{ parameters.AccountKey }} --overwrite
+   
+            #        get-content "$(System.DefaultWorkingDirectory)/${{ parameters.ResourcePath }}\plan\${{ parameters.env }}.plan"
+   
+            #        write-host "######################################################"
+   
+            #        az storage blob show --account-name ${{ parameters.StorageAccountName }} --container-name ${{ parameters.ContainerName }} --name ${{ parameters.env }}.plan --account-key ${{ parameters.AccountKey}}

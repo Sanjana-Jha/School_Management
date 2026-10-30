@@ -1,0 +1,61 @@
+#### Terraform Yaml for School Management System - Single Tenant (AKS, MySQL, Key Vault, Storage)
+trigger:
+  branches:
+    include:
+      - master
+      - main
+      - feature/*
+      - release/*
+  paths:
+    include:
+      - Infrastructure/single-tenant/*
+
+pr:
+  branches:
+    include:
+      - master
+      - main
+
+name: $(Year:yy).$(Month).$(DayOfMonth).$(BuildID)-$(SourceBranchName)
+
+variables:
+  AgentImage: "windows-latest"
+  system.debug: true
+  buildReasonCondition: in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI', 'Manual')
+
+stages:
+############################################################
+- stage: Dev_TFPLAN
+  displayName: Dev_TFPLAN
+  condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+  jobs:
+  - template: ./tf-plan-template.yml
+    parameters:
+      environments: school-dev-env
+      ServiceConnection: azure-spn-aetherus
+      ResourceGroupName: school-shared-tfstate-rg
+      StorageAccountName: schoolsharedtfstate
+      ContainerName: tfstate
+      KeyName: dev.terraform.tfstate
+      ResourcePath: 'Infrastructure/single-tenant'
+      env: dev
+      AccountKey: $(accesskey)
+      variable_group: school-shared-vg
+
+- stage: Dev_TFAPPLY
+  displayName: Dev_TFAPPLY
+  condition: and(succeeded(), or(in(variables['Build.SourceBranch'], 'refs/heads/main', 'refs/heads/master'), eq(variables['Build.Reason'], 'Manual')))
+  dependsOn: ['Dev_TFPLAN']
+  jobs:
+  - template: ./tf-apply-template.yml
+    parameters:
+      environments: school-dev-env
+      ServiceConnection: azure-spn-aetherus
+      ResourceGroupName: school-shared-tfstate-rg
+      StorageAccountName: schoolsharedtfstate
+      ContainerName: tfstate
+      KeyName: dev.terraform.tfstate
+      ResourcePath: 'Infrastructure/single-tenant'
+      env: dev
+      AccountKey: $(accesskey)
+      variable_group: school-shared-vg
