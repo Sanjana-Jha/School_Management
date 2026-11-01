@@ -25,7 +25,7 @@ variable "aks_node_count" {
 variable "aks_vm_size" {
   description = "Size of the VMs in the AKS cluster"
   type        = string
-  default     = "Standard_D2s_v3"
+  default     = "Standard_D2s_v5"
 }
 
 variable "aks_os_disk_size_gb" {
