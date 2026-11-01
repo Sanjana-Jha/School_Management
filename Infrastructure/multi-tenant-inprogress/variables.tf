@@ -31,7 +31,7 @@ variable "node_count" {
 variable "vm_size" {
   description = "VM size for AKS worker nodes"
   type        = string
-  default     = "Standard_D2s_v5"
+  default     = "Standard_D2s_v4"
 }
 
 variable "os_disk_size_gb" {
