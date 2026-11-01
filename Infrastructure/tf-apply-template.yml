@@ -35,7 +35,7 @@ jobs:
         deploy:
           steps:
           - checkout: self
-          - script: dir $(Build.SourcesDirectory)
+          - script: dir "$(Build.SourcesDirectory)"
           # - task: AzureCLI@2
           #   displayName: Azure CLI - download plan
           #   inputs:

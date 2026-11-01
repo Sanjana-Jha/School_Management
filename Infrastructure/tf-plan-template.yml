@@ -99,7 +99,7 @@ jobs:
              # NOTE: Some lines in the output were missing while using this task.
              # Write terraform show output in default format to a markdown file
              - powershell: |
-                   copy-item -path $(System.DefaultWorkingDirectory)/${{ parameters.ResourcePath }}/plan/${{ parameters.env }}.plan -Destination $(System.DefaultWorkingDirectory)/${{ parameters.ResourcePath }}/ 
+                   Copy-Item -Path "$(System.DefaultWorkingDirectory)/${{ parameters.ResourcePath }}/plan/${{ parameters.env }}.plan" -Destination "$(System.DefaultWorkingDirectory)/${{ parameters.ResourcePath }}/" -Force
              - task: TerraformTaskV4@4
                name: TerraformShow
                displayName: Terraform Show
@@ -124,7 +124,7 @@ jobs:
                    if ($null -ne $content) {
                        $newContent = "``````text`n" + $content + "`n``````"
                        Set-Content -Path "TerraformPlan.md" -Value $newContent
-                       Write-Host "##vso[task.uploadsummary]$(System.DefaultWorkingDirectory)/${{ parameters.ResourcePath }}/TerraformPlan.md"
+                       Write-Host "##vso[task.uploadsummary]$((Get-Item 'TerraformPlan.md').FullName)"
                    } else {
                        Write-Warning "TerraformPlan.md not found or empty."
                    }
