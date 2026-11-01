@@ -13,7 +13,7 @@ variable "env" {
 variable "location" {
   description = "Azure region"
   type        = string
-  default     = "Central US"
+  default     = "centralindia"
 }
 
 variable "aks_node_count" {

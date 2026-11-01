@@ -1,5 +1,5 @@
 resource_group_name  = "school-dev-rg"
-location             = "Central US"
+location             = "centralindia"
 cluster_name         = "school-dev-aks"
 dns_prefix           = "school-dev-aks-dns"
 node_count           = 1
