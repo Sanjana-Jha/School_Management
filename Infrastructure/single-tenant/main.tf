@@ -14,8 +14,8 @@ terraform {
 provider "azurerm" {
   features {
     key_vault {
-      purge_soft_delete_on_destroy    = false
-      recover_soft_deleted_key_vaults = true
+      purge_soft_delete_on_destroy    = true
+      recover_soft_deleted_key_vaults = false
     }
   }
 }
@@ -51,9 +51,13 @@ resource "random_password" "password" {
 
 # Random Suffix for Globally Unique Names (Key Vault, Storage Account, MySQL Server)
 resource "random_string" "suffix" {
-  length  = 4
+  length  = 6
   special = false
   upper   = false
+  keepers = {
+    region = var.location
+    env    = var.env
+  }
 }
 
 # Azure Database for MySQL Flexible Server

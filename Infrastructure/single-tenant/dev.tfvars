@@ -1,6 +1,6 @@
 name                = "school"
 env                 = "dev"
-location            = "centralindia"
+location            = "eastus"
 aks_node_count      = 1
 aks_vm_size         = "Standard_D2s_v5"
 aks_os_disk_size_gb = 30
