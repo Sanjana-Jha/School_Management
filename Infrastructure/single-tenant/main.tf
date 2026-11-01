@@ -67,7 +67,7 @@ resource "random_string" "suffix" {
 resource "azurerm_mysql_flexible_server" "mysql" {
   name                   = "${local.mysql_prefix}-mysql-${random_string.suffix.result}"
   resource_group_name    = azurerm_resource_group.main.name
-  location               = azurerm_resource_group.main.location
+  location               = var.mysql_location != "" ? var.mysql_location : azurerm_resource_group.main.location
   version                = var.mysql_version
   administrator_login    = var.mysql_admin
   administrator_password = random_password.password.result
