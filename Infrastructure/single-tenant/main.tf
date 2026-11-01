@@ -52,7 +52,7 @@ resource "random_password" "password" {
   override_special = "!@&()_+"
 }
 
-# Random Suffix for Globally Unique Names (Key Vault, Storage Account, MySQL Server)
+# Random Suffix for Globally Unique Names (Key Vault, Storage Account)
 resource "random_string" "suffix" {
   length  = 6
   special = false
@@ -63,9 +63,19 @@ resource "random_string" "suffix" {
   }
 }
 
+# Dedicated Random Suffix for MySQL Server
+resource "random_string" "mysql_suffix" {
+  length  = 6
+  special = false
+  upper   = false
+  keepers = {
+    location = var.mysql_location
+  }
+}
+
 # Azure Database for MySQL Flexible Server
 resource "azurerm_mysql_flexible_server" "mysql" {
-  name                   = "${local.mysql_prefix}-mysql-${random_string.suffix.result}"
+  name                   = "${local.mysql_prefix}-mysql-${random_string.mysql_suffix.result}"
   resource_group_name    = azurerm_resource_group.main.name
   location               = var.mysql_location != "" ? var.mysql_location : azurerm_resource_group.main.location
   version                = var.mysql_version
