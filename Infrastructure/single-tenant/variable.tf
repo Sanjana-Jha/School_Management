@@ -61,5 +61,5 @@ variable "mysql_database_name" {
 variable "mysql_location" {
   description = "Azure region for MySQL Flexible Server (can differ from resource group to bypass capacity restrictions)"
   type        = string
-  default     = "centralus"
+  default     = "westus2"
 }
