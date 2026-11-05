@@ -53,7 +53,7 @@ stages:
               inlineScript: |
                 # Ensure kubectl is available in PATH
                 if (-not (Get-Command kubectl -ErrorAction SilentlyContinue)) {
-                    $wingetKubectl = "C:\Users\de\AppData\Local\Microsoft\WinGet\Packages\Kubernetes.kubectl_Microsoft.Winget.Source_8wekyb3d8bbwe\kubectl.exe"
+                    $wingetKubectl = "C:\Users\de\AppData\Local\Microsoft\WinGet\Packages\Kubernetes.kubectl_Microsoft.WinGet.Source_8wekyb3d8bbwe\kubectl.exe"
                     if (Test-Path $wingetKubectl) {
                         $env:PATH = "$(Split-Path $wingetKubectl);$env:PATH"
                     } else {
@@ -69,6 +69,10 @@ stages:
                 Write-Host "Deploying NGINX Ingress Controller..."
                 kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.12.0/deploy/static/provider/cloud/deploy.yaml
 
+                Write-Host "Waiting for NGINX Ingress Controller pod to be ready..."
+                kubectl wait --namespace ingress-nginx --for=condition=ready pod --selector=app.kubernetes.io/component=controller --timeout=180s
+                Start-Sleep -Seconds 5
+
                 Write-Host "Ensuring 'dev' namespace exists..."
                 $ns = kubectl get namespace dev --ignore-not-found -o name
                 if (-not $ns) {
@@ -76,7 +80,28 @@ stages:
                 }
 
                 Write-Host "Applying School Ingress..."
-                kubectl apply -f "$(System.DefaultWorkingDirectory)/Infrastructure/K8-ingress-setup/school-ingress.yaml"
+                for ($attempt = 1; $attempt -le 5; $attempt++) {
+                    kubectl apply -f "$(System.DefaultWorkingDirectory)/Infrastructure/K8-ingress-setup/school-ingress.yaml"
+                    if ($LASTEXITCODE -eq 0) {
+                        Write-Host "School Ingress applied successfully!"
+                        break
+                    }
+                    Write-Host "Webhook warming up, retrying apply in 5 seconds (attempt $attempt/5)..."
+                    Start-Sleep -Seconds 5
+                }
 
-                Write-Host "Checking Ingress status..."
+                Write-Host "Waiting for Azure Public IP to be allocated..."
+                for ($i = 1; $i -le 15; $i++) {
+                    $ip = kubectl get ingress school-sms-ingress -n dev -o jsonpath="{.status.loadBalancer.ingress[0].ip}" 2>$null
+                    if ($ip) {
+                        Write-Host "=========================================="
+                        Write-Host "SUCCESS! INGRESS PUBLIC IP: $ip"
+                        Write-Host "=========================================="
+                        break
+                    }
+                    Write-Host "Waiting for Public IP (attempt $i/15)..."
+                    Start-Sleep -Seconds 6
+                }
+
+                Write-Host "Final Ingress Status in dev namespace:"
                 kubectl get ingress -n dev
