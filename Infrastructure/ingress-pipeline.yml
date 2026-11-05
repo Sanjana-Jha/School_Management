@@ -40,6 +40,10 @@ stages:
         deploy:
           steps:
           - checkout: self
+          - task: KubectlInstaller@0
+            displayName: 'Install Kubectl'
+            inputs:
+              kubectlVersion: 'latest'
           - task: AzureCLI@2
             displayName: 'Install Ingress Controller & Apply Rules'
             inputs:
@@ -47,6 +51,18 @@ stages:
               scriptType: 'ps'
               scriptLocation: 'inlineScript'
               inlineScript: |
+                # Ensure kubectl is available in PATH
+                if (-not (Get-Command kubectl -ErrorAction SilentlyContinue)) {
+                    $wingetKubectl = "C:\Users\de\AppData\Local\Microsoft\WinGet\Packages\Kubernetes.kubectl_Microsoft.Winget.Source_8wekyb3d8bbwe\kubectl.exe"
+                    if (Test-Path $wingetKubectl) {
+                        $env:PATH = "$(Split-Path $wingetKubectl);$env:PATH"
+                    } else {
+                        Write-Host "Installing kubectl via az aks install-cli..."
+                        az aks install-cli --install-location "$env:TEMP\kubectl.exe"
+                        $env:PATH = "$env:TEMP;$env:PATH"
+                    }
+                }
+
                 Write-Host "Connecting to AKS cluster: $(ClusterName) in $(ResourceGroup)..."
                 az aks get-credentials --resource-group $(ResourceGroup) --name $(ClusterName) --overwrite-existing
 
