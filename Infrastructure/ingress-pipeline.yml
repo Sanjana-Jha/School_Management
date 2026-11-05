@@ -1,0 +1,66 @@
+### Ingress Pipeline for School Management System
+### Applies Ingress routing to AKS dev cluster
+trigger:
+  branches:
+    include:
+      - main
+      - master
+      - feature/*
+      - release/*
+  paths:
+    include:
+      - Infrastructure/K8-ingress-setup/**
+      - Infrastructure/ingress-pipeline.yml
+
+pr:
+  branches:
+    include:
+      - master
+      - main
+
+name: $(Year:yy).$(Month).$(DayOfMonth).$(BuildID)-$(SourceBranchName)
+
+variables:
+  system.debug: true
+  ServiceConnection: 'azure-spn-aetherus'
+  ResourceGroup: 'school-dev-rg'
+  ClusterName: 'school-dev-aks'
+
+stages:
+- stage: Dev
+  displayName: Deploy Ingress to Dev
+  jobs:
+  - deployment: deploy_ingress_dev
+    displayName: Deploy Ingress Rules to Dev
+    pool:
+      name: 'chattel.pool'
+    environment: school-dev-env
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - checkout: self
+          - task: AzureCLI@2
+            displayName: 'Install Ingress Controller & Apply Rules'
+            inputs:
+              azureSubscription: $(ServiceConnection)
+              scriptType: 'ps'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                Write-Host "Connecting to AKS cluster: $(ClusterName) in $(ResourceGroup)..."
+                az aks get-credentials --resource-group $(ResourceGroup) --name $(ClusterName) --overwrite-existing
+
+                Write-Host "Deploying NGINX Ingress Controller..."
+                kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.12.0/deploy/static/provider/cloud/deploy.yaml
+
+                Write-Host "Ensuring 'dev' namespace exists..."
+                $ns = kubectl get namespace dev --ignore-not-found -o name
+                if (-not $ns) {
+                    kubectl create namespace dev
+                }
+
+                Write-Host "Applying School Ingress..."
+                kubectl apply -f "$(System.DefaultWorkingDirectory)/Infrastructure/K8-ingress-setup/school-ingress.yaml"
+
+                Write-Host "Checking Ingress status..."
+                kubectl get ingress -n dev
