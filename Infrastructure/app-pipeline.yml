@@ -36,18 +36,27 @@ stages:
     steps:
     - checkout: self
     - task: AzureCLI@2
-      displayName: 'Build & Push via Azure ACR'
+      displayName: 'Docker Login, Build & Push to ACR'
       inputs:
         azureSubscription: $(ServiceConnection)
         scriptType: 'ps'
         scriptLocation: 'inlineScript'
         inlineScript: |
-          Write-Host "Building and pushing container image to $(AcrName).azurecr.io..."
-          az acr build `
-            --registry $(AcrName) `
-            --image $(ImageName):$(Build.BuildId) `
-            --image $(ImageName):latest `
-            .
+          if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+              Write-Error "Docker is not installed or not in PATH on this build agent. Ensure Docker is running."
+              exit 1
+          }
+
+          Write-Host "Logging into Azure Container Registry $(AcrName)..."
+          az acr login --name $(AcrName)
+
+          Write-Host "Building Docker image $(AcrName).azurecr.io/$(ImageName):$(Build.BuildId)..."
+          docker build -t $(AcrName).azurecr.io/$(ImageName):$(Build.BuildId) -t $(AcrName).azurecr.io/$(ImageName):latest .
+
+          Write-Host "Pushing image to $(AcrName).azurecr.io..."
+          docker push $(AcrName).azurecr.io/$(ImageName):$(Build.BuildId)
+          docker push $(AcrName).azurecr.io/$(ImageName):latest
+          Write-Host "Image successfully built and pushed to ACR!"
 
 # ==============================================================================
 # STAGE 2: CD - DEPLOY TO AZURE KUBERNETES SERVICE (AKS)
