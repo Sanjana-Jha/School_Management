@@ -1,0 +1,128 @@
+### CI/CD Pipeline for School Management System
+### Stage 1 (CI): Builds and pushes container image to Azure Container Registry (ACR)
+### Stage 2 (CD): Configures AKS, syncs Key Vault secrets, deploys application, and runs DB migrations
+trigger:
+  branches:
+    include:
+      - main
+      - master
+  paths:
+    exclude:
+      - Infrastructure/single-tenant/**
+      - Infrastructure/shared-resource/**
+
+name: $(Year:yy).$(Month).$(DayOfMonth).$(BuildID)-app-$(SourceBranchName)
+
+variables:
+  ServiceConnection: 'azure-spn-aetherus'
+  AcrName: 'schoolsharedacr01'
+  ImageName: 'school-sms'
+  ResourceGroup: 'school-dev-rg'
+  ClusterName: 'school-dev-aks'
+  KeyVaultName: 'school-dev-vtts5o-kv'
+
+pool:
+  name: 'chattel.pool'
+
+stages:
+# ==============================================================================
+# STAGE 1: CI - BUILD AND PUSH CONTAINER IMAGE TO ACR
+# ==============================================================================
+- stage: CI_Build_Push
+  displayName: '1. Build & Push Image (CI)'
+  jobs:
+  - job: BuildAndPush
+    displayName: 'Build and Push Image to ACR'
+    steps:
+    - checkout: self
+    - task: AzureCLI@2
+      displayName: 'Build & Push via Azure ACR'
+      inputs:
+        azureSubscription: $(ServiceConnection)
+        scriptType: 'ps'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          Write-Host "Building and pushing container image to $(AcrName).azurecr.io..."
+          az acr build `
+            --registry $(AcrName) `
+            --image $(ImageName):$(Build.BuildId) `
+            --image $(ImageName):latest `
+            --file Infrastructure/docker/Dockerfile `
+            .
+
+# ==============================================================================
+# STAGE 2: CD - DEPLOY TO AZURE KUBERNETES SERVICE (AKS)
+# ==============================================================================
+- stage: CD_Deploy_AKS
+  displayName: '2. Deploy to AKS (CD)'
+  dependsOn: CI_Build_Push
+  condition: succeeded()
+  jobs:
+  - deployment: DeployApp
+    displayName: 'Deploy App to Dev Namespace'
+    environment: school-dev-env
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - checkout: self
+          - task: KubectlInstaller@0
+            displayName: 'Install Kubectl'
+            inputs:
+              kubectlVersion: 'latest'
+          - task: AzureCLI@2
+            displayName: 'Attach ACR, Configure Secrets & Deploy Workload'
+            inputs:
+              azureSubscription: $(ServiceConnection)
+              scriptType: 'ps'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                # Ensure kubectl is in PATH
+                if (-not (Get-Command kubectl -ErrorAction SilentlyContinue)) {
+                    $wingetKubectl = "C:\Users\de\AppData\Local\Microsoft\WinGet\Packages\Kubernetes.kubectl_Microsoft.WinGet.Source_8wekyb3d8bbwe\kubectl.exe"
+                    if (Test-Path $wingetKubectl) {
+                        $env:PATH = "$(Split-Path $wingetKubectl);$env:PATH"
+                    } else {
+                        Write-Host "Installing kubectl via az aks install-cli..."
+                        az aks install-cli --install-location "$env:TEMP\kubectl.exe"
+                        $env:PATH = "$env:TEMP;$env:PATH"
+                    }
+                }
+
+                Write-Host "1. Connecting to AKS cluster: $(ClusterName)..."
+                az aks get-credentials --resource-group $(ResourceGroup) --name $(ClusterName) --overwrite-existing
+
+                Write-Host "2. Ensuring AKS is attached to ACR: $(AcrName)..."
+                az aks update --resource-group $(ResourceGroup) --name $(ClusterName) --attach-acr $(AcrName)
+
+                Write-Host "3. Fetching database credentials from Key Vault: $(KeyVaultName)..."
+                $dbHost = az keyvault secret show --vault-name $(KeyVaultName) --name mysql-host --query value -o tsv
+                $dbUser = az keyvault secret show --vault-name $(KeyVaultName) --name mysql-user --query value -o tsv
+                $dbPassword = az keyvault secret show --vault-name $(KeyVaultName) --name mysql-password --query value -o tsv
+
+                Write-Host "4. Creating Kubernetes Secret in 'dev' namespace..."
+                kubectl create namespace dev --dry-run=client -o yaml | kubectl apply -f -
+                
+                # Standard Laravel 32-byte application encryption key
+                $appKey = "base64:sR2kL7pQ8wX9yZ0aB1cD2eF3gH4iJ5kL6mN7oP8qR9s="
+                
+                kubectl create secret generic school-sms-secrets `
+                  --namespace dev `
+                  --from-literal=DB_HOST="$dbHost" `
+                  --from-literal=DB_USERNAME="$dbUser" `
+                  --from-literal=DB_PASSWORD="$dbPassword" `
+                  --from-literal=DB_DATABASE="school_sms" `
+                  --from-literal=APP_KEY="$appKey" `
+                  --dry-run=client -o yaml | kubectl apply -f -
+
+                Write-Host "5. Applying School Deployment and Service..."
+                kubectl apply -f "$(System.DefaultWorkingDirectory)/Infrastructure/K8-ingress-setup/school-sms-deployment.yaml"
+
+                Write-Host "6. Waiting for School SMS pod to be ready..."
+                kubectl rollout status deployment/school-sms -n dev --timeout=180s
+
+                Write-Host "7. Running Database Migrations..."
+                kubectl exec -n dev deployment/school-sms -- php artisan migrate --force
+
+                Write-Host "8. Verifying Dev Deployment..."
+                kubectl get pods,svc,ingress -n dev
