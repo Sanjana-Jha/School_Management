@@ -1,16 +1,37 @@
 FROM php:8.0-fpm-alpine
 
-# Install helper to install PHP extensions easily
+# Install system utilities, Nginx, and Supervisor
+RUN apk add --no-cache nginx supervisor bash git curl
+
+# Install PHP extensions required by Laravel
 COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
+RUN install-php-extensions pdo_mysql mbstring exif pcntl bcmath gd zip opcache
 
-# Install system utilities & required PHP extensions
-RUN apk add --no-cache bash git curl \
-    && install-php-extensions pdo_mysql mbstring exif pcntl bcmath gd zip
-
-# Get latest Composer
+# Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www
 
-EXPOSE 9000
-CMD ["php-fpm"]
+# Copy application source code
+COPY . /var/www
+
+# Install production dependencies
+RUN composer install --no-dev --optimize-autoloader --no-interaction
+
+# Setup Nginx configuration
+COPY docker/nginx/conf.d/app.conf /etc/nginx/http.d/default.conf
+
+# Setup Supervisor configuration
+COPY docker/supervisord.conf /etc/supervisord.conf
+
+# Setup Entrypoint script
+COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+# Set directory permissions for web user
+RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache \
+    && chmod -R 775 /var/www/storage /var/www/bootstrap/cache
+
+EXPOSE 80
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

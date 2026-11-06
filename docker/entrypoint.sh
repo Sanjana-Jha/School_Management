@@ -14,3 +14,4 @@ php artisan config:clear || true
 
 echo "Starting Nginx and PHP-FPM via Supervisor..."
 exec /usr/bin/supervisord -c /etc/supervisord.conf
+

@@ -47,7 +47,6 @@ stages:
             --registry $(AcrName) `
             --image $(ImageName):$(Build.BuildId) `
             --image $(ImageName):latest `
-            --file Infrastructure/docker/Dockerfile `
             .
 
 # ==============================================================================
@@ -126,3 +125,4 @@ stages:
 
                 Write-Host "8. Verifying Dev Deployment..."
                 kubectl get pods,svc,ingress -n dev
+

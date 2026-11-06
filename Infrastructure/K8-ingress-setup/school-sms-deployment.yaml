@@ -94,3 +94,4 @@ spec:
     protocol: TCP
   selector:
     app: school-sms
+
