@@ -52,10 +52,22 @@ stages:
 
           Write-Host "Building Docker image $(AcrName).azurecr.io/$(ImageName):$(Build.BuildId)..."
           docker build -t $(AcrName).azurecr.io/$(ImageName):$(Build.BuildId) -t $(AcrName).azurecr.io/$(ImageName):latest .
+          if ($LASTEXITCODE -ne 0) {
+              Write-Error "Docker build failed with exit code $LASTEXITCODE"
+              exit $LASTEXITCODE
+          }
 
           Write-Host "Pushing image to $(AcrName).azurecr.io..."
           docker push $(AcrName).azurecr.io/$(ImageName):$(Build.BuildId)
+          if ($LASTEXITCODE -ne 0) {
+              Write-Error "Docker push failed for tag $(Build.BuildId) with exit code $LASTEXITCODE"
+              exit $LASTEXITCODE
+          }
           docker push $(AcrName).azurecr.io/$(ImageName):latest
+          if ($LASTEXITCODE -ne 0) {
+              Write-Error "Docker push failed for tag latest with exit code $LASTEXITCODE"
+              exit $LASTEXITCODE
+          }
           Write-Host "Image successfully built and pushed to ACR!"
 
 # ==============================================================================
