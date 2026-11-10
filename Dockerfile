@@ -20,13 +20,15 @@ RUN composer install --no-dev --optimize-autoloader --no-interaction
 
 # Setup Nginx configuration
 COPY docker/nginx/conf.d/app.conf /etc/nginx/http.d/default.conf
+RUN sed -i 's/\r$//' /etc/nginx/http.d/default.conf
 
 # Setup Supervisor configuration
 COPY docker/supervisord.conf /etc/supervisord.conf
+RUN sed -i 's/\r$//' /etc/supervisord.conf
 
 # Setup Entrypoint script
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+RUN sed -i 's/\r$//' /usr/local/bin/entrypoint.sh && chmod +x /usr/local/bin/entrypoint.sh
 
 # Ensure Laravel storage and bootstrap cache directories exist with proper permissions
 RUN mkdir -p /var/www/storage/framework/cache/data \

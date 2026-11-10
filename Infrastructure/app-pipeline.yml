@@ -148,7 +148,6 @@ stages:
                 kubectl apply -f "$(System.DefaultWorkingDirectory)/Infrastructure/K8-ingress-setup/school-sms-deployment.yaml"
 
                 Write-Host "6. Waiting for School SMS pod to be ready..."
-                kubectl rollout restart deployment/school-sms -n dev 2>$null
                 kubectl rollout status deployment/school-sms -n dev --timeout=180s
                 if ($LASTEXITCODE -ne 0) {
                     Write-Host "Pod rollout timed out. Checking pod details..."
