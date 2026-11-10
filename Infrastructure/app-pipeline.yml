@@ -166,6 +166,9 @@ stages:
                 Write-Host "Seeding database default records..."
                 kubectl exec -n dev deployment/school-sms -c school-sms -- php artisan db:seed --force
 
+                Write-Host "Ensuring storage permissions..."
+                kubectl exec -n dev deployment/school-sms -c school-sms -- sh -c "chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache && chmod -R 777 /var/www/storage /var/www/bootstrap/cache"
+
                 Write-Host "8. Verifying Dev Deployment..."
                 kubectl get pods,svc,ingress -n dev
 

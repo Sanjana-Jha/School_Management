@@ -1,7 +1,7 @@
 FROM php:8.0-fpm-alpine
 
 # Install system utilities, Nginx, and Supervisor
-RUN apk add --no-cache nginx supervisor bash git curl
+RUN apk add --no-cache nginx supervisor bash git curl ca-certificates
 
 # Install PHP extensions required by Laravel
 COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
@@ -36,9 +36,10 @@ RUN mkdir -p /var/www/storage/framework/cache/data \
     && mkdir -p /var/www/storage/framework/views \
     && mkdir -p /var/www/storage/app/public \
     && mkdir -p /var/www/storage/logs \
+    && touch /var/www/storage/logs/laravel.log \
     && mkdir -p /var/www/bootstrap/cache \
     && chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache \
-    && chmod -R 775 /var/www/storage /var/www/bootstrap/cache
+    && chmod -R 777 /var/www/storage /var/www/bootstrap/cache
 
 EXPOSE 80
 
