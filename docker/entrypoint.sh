@@ -9,6 +9,9 @@ mkdir -p /var/www/storage/logs
 chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
 chmod -R 775 /var/www/storage /var/www/bootstrap/cache
 
+# Create storage symlink if not present
+php artisan storage:link || true
+
 # Clear cached configuration to ensure environment variables are read
 php artisan config:clear || true
 

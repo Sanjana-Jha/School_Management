@@ -144,8 +144,9 @@ stages:
                   --from-literal=APP_KEY="$appKey" `
                   --dry-run=client -o yaml | kubectl apply -f -
 
-                Write-Host "5. Applying School Deployment and Service..."
+                Write-Host "5. Applying School Deployment, Service and Ingress..."
                 kubectl apply -f "$(System.DefaultWorkingDirectory)/Infrastructure/K8-ingress-setup/school-sms-deployment.yaml"
+                kubectl apply -f "$(System.DefaultWorkingDirectory)/Infrastructure/K8-ingress-setup/school-ingress.yaml"
 
                 Write-Host "Updating deployment to use fresh image tag: $(Build.BuildId)..."
                 kubectl set image deployment/school-sms school-sms="$(AcrName).azurecr.io/$(ImageName):$(Build.BuildId)" -n dev
@@ -160,7 +161,9 @@ stages:
                 }
 
                 Write-Host "7. Running Database Migrations..."
-                kubectl exec -n dev deployment/school-sms -- php artisan migrate --force
+                kubectl exec -n dev deployment/school-sms -c school-sms -- php artisan migrate --force
+                Write-Host "Seeding database default records..."
+                kubectl exec -n dev deployment/school-sms -c school-sms -- php artisan db:seed --force || true
 
                 Write-Host "8. Verifying Dev Deployment..."
                 kubectl get pods,svc,ingress -n dev
