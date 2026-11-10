@@ -112,16 +112,25 @@ stages:
                 Write-Host "1. Connecting to AKS cluster: $(ClusterName)..."
                 az aks get-credentials --resource-group $(ResourceGroup) --name $(ClusterName) --overwrite-existing
 
-                Write-Host "2. Ensuring AKS is attached to ACR: $(AcrName)..."
-                az aks update --resource-group $(ResourceGroup) --name $(ClusterName) --attach-acr $(AcrName)
+                Write-Host "2. Fetching ACR credentials for image pull secret..."
+                az acr update -n $(AcrName) --admin-enabled true
+                $acrPassword = az acr credential show --name $(AcrName) --query "passwords[0].value" -o tsv
 
                 Write-Host "3. Fetching database credentials from Key Vault: $(KeyVaultName)..."
                 $dbHost = az keyvault secret show --vault-name $(KeyVaultName) --name mysql-host --query value -o tsv
                 $dbUser = az keyvault secret show --vault-name $(KeyVaultName) --name mysql-user --query value -o tsv
                 $dbPassword = az keyvault secret show --vault-name $(KeyVaultName) --name mysql-password --query value -o tsv
 
-                Write-Host "4. Creating Kubernetes Secret in 'dev' namespace..."
+                Write-Host "4. Creating Kubernetes Secrets in 'dev' namespace..."
                 kubectl create namespace dev --dry-run=client -o yaml | kubectl apply -f -
+
+                # Create Docker registry pull secret for ACR
+                kubectl create secret docker-registry acr-secret `
+                  --namespace dev `
+                  --docker-server="$(AcrName).azurecr.io" `
+                  --docker-username="$(AcrName)" `
+                  --docker-password="$acrPassword" `
+                  --dry-run=client -o yaml | kubectl apply -f -
                 
                 # Standard Laravel 32-byte application encryption key
                 $appKey = "base64:sR2kL7pQ8wX9yZ0aB1cD2eF3gH4iJ5kL6mN7oP8qR9s="
@@ -139,7 +148,14 @@ stages:
                 kubectl apply -f "$(System.DefaultWorkingDirectory)/Infrastructure/K8-ingress-setup/school-sms-deployment.yaml"
 
                 Write-Host "6. Waiting for School SMS pod to be ready..."
+                kubectl rollout restart deployment/school-sms -n dev 2>$null
                 kubectl rollout status deployment/school-sms -n dev --timeout=180s
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Host "Pod rollout timed out. Checking pod details..."
+                    kubectl describe pod -l app=school-sms -n dev
+                    kubectl logs -l app=school-sms -n dev --tail=50
+                    exit 1
+                }
 
                 Write-Host "7. Running Database Migrations..."
                 kubectl exec -n dev deployment/school-sms -- php artisan migrate --force
