@@ -162,8 +162,9 @@ stages:
 
                 Write-Host "7. Running Database Migrations..."
                 kubectl exec -n dev deployment/school-sms -c school-sms -- php artisan migrate --force
+
                 Write-Host "Seeding database default records..."
-                kubectl exec -n dev deployment/school-sms -c school-sms -- php artisan db:seed --force || true
+                kubectl exec -n dev deployment/school-sms -c school-sms -- php artisan db:seed --force
 
                 Write-Host "8. Verifying Dev Deployment..."
                 kubectl get pods,svc,ingress -n dev
