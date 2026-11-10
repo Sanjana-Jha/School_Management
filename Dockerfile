@@ -42,4 +42,4 @@ RUN mkdir -p /var/www/storage/framework/cache/data \
 
 EXPOSE 80
 
-ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+ENTRYPOINT ["/bin/sh", "/usr/local/bin/entrypoint.sh"]

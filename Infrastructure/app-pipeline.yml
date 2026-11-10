@@ -147,6 +147,9 @@ stages:
                 Write-Host "5. Applying School Deployment and Service..."
                 kubectl apply -f "$(System.DefaultWorkingDirectory)/Infrastructure/K8-ingress-setup/school-sms-deployment.yaml"
 
+                Write-Host "Updating deployment to use fresh image tag: $(Build.BuildId)..."
+                kubectl set image deployment/school-sms school-sms="$(AcrName).azurecr.io/$(ImageName):$(Build.BuildId)" -n dev
+
                 Write-Host "6. Waiting for School SMS pod to be ready..."
                 kubectl rollout status deployment/school-sms -n dev --timeout=180s
                 if ($LASTEXITCODE -ne 0) {
