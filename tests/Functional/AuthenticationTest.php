@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Feature;
+namespace Tests\Functional;
 
 use Tests\TestCase;
 
@@ -35,3 +35,4 @@ class AuthenticationTest extends TestCase
         $response->assertStatus(302);
     }
 }
+
