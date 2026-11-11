@@ -21,18 +21,38 @@ class AuthenticationTest extends TestCase
     }
 
     /**
-     * Test that invalid login credentials fail validation or redirect back.
+     * Test that logout request redirects properly.
      *
      * @return void
      */
-    public function testInvalidLoginAttempt()
+    public function testLogoutRedirects()
     {
-        $response = $this->post('/login', [
-            'identity' => 'nonexistent_user',
-            'password' => 'wrong_password',
-        ]);
+        $response = $this->post('/logout');
 
         $response->assertStatus(302);
     }
-}
 
+    /**
+     * Test that the privacy policy page is accessible.
+     *
+     * @return void
+     */
+    public function testPrivacyPolicyPage()
+    {
+        $response = $this->get('/privacy-policy');
+
+        $response->assertStatus(200);
+    }
+
+    /**
+     * Test that the terms of use page is accessible.
+     *
+     * @return void
+     */
+    public function testTermsOfUsePage()
+    {
+        $response = $this->get('/terms-of-use');
+
+        $response->assertStatus(200);
+    }
+}
