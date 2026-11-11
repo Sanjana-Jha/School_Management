@@ -50,6 +50,11 @@ stages:
           Write-Host "Logging into Azure Container Registry $(AcrName)..."
           az acr login --name $(AcrName)
 
+          Write-Host "Cleaning up old Docker cache and dangling images on build agent..."
+          docker container prune -f 2>$null
+          docker image prune -f 2>$null
+          docker builder prune -f 2>$null
+
           Write-Host "Building Docker image $(AcrName).azurecr.io/$(ImageName):$(Build.BuildId)..."
           docker build -t $(AcrName).azurecr.io/$(ImageName):$(Build.BuildId) -t $(AcrName).azurecr.io/$(ImageName):latest .
           if ($LASTEXITCODE -ne 0) {
