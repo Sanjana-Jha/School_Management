@@ -13,6 +13,16 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
+  - host: school.hdps.online
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: school-sms-service
+            port:
+              number: 80
   - host: hdps.online
     http:
       paths:
