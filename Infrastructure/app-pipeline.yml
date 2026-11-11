@@ -47,20 +47,22 @@ stages:
               exit 1
           }
 
-          # Enforce backward-compatible Docker API version to eliminate API version mismatch errors
-          $env:DOCKER_API_VERSION = "1.43"
-
           Write-Host "Checking Docker engine connectivity..."
           docker version
+          if ($LASTEXITCODE -ne 0) {
+              Write-Error "Docker engine is not responding. Please ensure Docker Desktop is running and healthy."
+              exit 1
+          }
 
           Write-Host "Logging into Azure Container Registry $(AcrName)..."
-          az acr update -n $(AcrName) --admin-enabled true
-          $acrPassword = az acr credential show --name $(AcrName) --query "passwords[0].value" -o tsv
-          docker login $(AcrName).azurecr.io -u $(AcrName) -p $acrPassword
+          az acr login -n $(AcrName)
           if ($LASTEXITCODE -ne 0) {
-              Write-Host "Direct docker login failed. Trying token login..."
-              $acrToken = az acr login -n $(AcrName) --expose-token --query accessToken -o tsv
-              docker login $(AcrName).azurecr.io -u 00000000-0000-0000-0000-000000000000 -p $acrToken
+              Write-Host "az acr login standard method failed. Trying token-based login fallback..."
+              az acr update -n $(AcrName) --admin-enabled true 2>$null
+              $acrPassword = az acr credential show --name $(AcrName) --query "passwords[0].value" -o tsv 2>$null
+              if ($acrPassword) {
+                  docker login $(AcrName).azurecr.io -u $(AcrName) -p $acrPassword
+              }
           }
           if ($LASTEXITCODE -ne 0) {
               Write-Error "Docker login failed for ACR $(AcrName) with exit code $LASTEXITCODE"
