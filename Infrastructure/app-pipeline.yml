@@ -48,7 +48,13 @@ stages:
           }
 
           Write-Host "Logging into Azure Container Registry $(AcrName)..."
-          az acr login --name $(AcrName)
+          az acr update -n $(AcrName) --admin-enabled true
+          $acrPassword = az acr credential show --name $(AcrName) --query "passwords[0].value" -o tsv
+          docker login $(AcrName).azurecr.io -u $(AcrName) -p $acrPassword
+          if ($LASTEXITCODE -ne 0) {
+              Write-Error "Docker login failed for ACR $(AcrName) with exit code $LASTEXITCODE"
+              exit $LASTEXITCODE
+          }
 
           Write-Host "Cleaning up old Docker cache and dangling images on build agent..."
           try { docker container prune -f 2>$null } catch {}
