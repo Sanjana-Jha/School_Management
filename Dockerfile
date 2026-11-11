@@ -5,7 +5,7 @@ RUN apk add --no-cache nginx supervisor bash git curl ca-certificates
 
 # Install PHP extensions required by Laravel
 COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
-RUN install-php-extensions pdo_mysql mbstring exif pcntl bcmath gd zip opcache
+RUN install-php-extensions pdo_mysql pdo_sqlite sqlite3 mbstring exif pcntl bcmath gd zip opcache
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -15,8 +15,8 @@ WORKDIR /var/www
 # Copy application source code
 COPY . /var/www
 
-# Install production dependencies
-RUN composer install --no-dev --optimize-autoloader --no-interaction
+# Install dependencies including testing tools
+RUN composer install --optimize-autoloader --no-interaction
 
 # Setup Nginx configuration
 COPY docker/nginx/conf.d/app.conf /etc/nginx/http.d/default.conf

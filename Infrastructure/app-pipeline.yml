@@ -57,6 +57,17 @@ stages:
               exit $LASTEXITCODE
           }
 
+          Write-Host "Running Unit & Functional Tests (PHPUnit)..."
+          docker run --rm `
+            -v "$(System.DefaultWorkingDirectory):/var/www/test-output" `
+            $(AcrName).azurecr.io/$(ImageName):$(Build.BuildId) `
+            php -d memory_limit=512M vendor/bin/phpunit --log-junit /var/www/test-output/test-results.xml
+          if ($LASTEXITCODE -ne 0) {
+              Write-Error "PHPUnit tests failed with exit code $LASTEXITCODE. Aborting push."
+              exit $LASTEXITCODE
+          }
+          Write-Host "All Unit & Functional Tests passed successfully!"
+
           Write-Host "Pushing image to $(AcrName).azurecr.io..."
           docker push $(AcrName).azurecr.io/$(ImageName):$(Build.BuildId)
           if ($LASTEXITCODE -ne 0) {
@@ -68,7 +79,14 @@ stages:
               Write-Error "Docker push failed for tag latest with exit code $LASTEXITCODE"
               exit $LASTEXITCODE
           }
-          Write-Host "Image successfully built and pushed to ACR!"
+          Write-Host "Image successfully built, tested and pushed to ACR!"
+    - task: PublishTestResults@2
+      displayName: 'Publish Unit & Functional Test Results'
+      condition: always()
+      inputs:
+        testResultsFormat: 'JUnit'
+        testResultsFiles: '**/test-results.xml'
+        testRunTitle: 'Laravel Unit & Functional Tests'
 
 # ==============================================================================
 # STAGE 2: CD - DEPLOY TO AZURE KUBERNETES SERVICE (AKS)
@@ -171,4 +189,20 @@ stages:
 
                 Write-Host "8. Verifying Dev Deployment..."
                 kubectl get pods,svc,ingress -n dev
+
+                Write-Host "9. Running Live Functional & Smoke Tests..."
+                $testUrl = "http://school.hdps.online/login"
+                Write-Host "Testing HTTP response from $testUrl..."
+                for ($attempt = 1; $attempt -le 6; $attempt++) {
+                    try {
+                        $res = Invoke-WebRequest -Uri $testUrl -UseBasicParsing -TimeoutSec 15
+                        if ($res.StatusCode -eq 200) {
+                            Write-Host "SUCCESS: Live endpoint $testUrl is responding with HTTP 200 OK!"
+                            break
+                        }
+                    } catch {
+                        Write-Host "Attempt $attempt/6: Waiting for endpoint readiness ($($_))..."
+                        Start-Sleep -Seconds 5
+                    }
+                }
 

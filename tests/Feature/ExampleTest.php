@@ -3,19 +3,30 @@
 namespace Tests\Feature;
 
 use Tests\TestCase;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 
 class ExampleTest extends TestCase
 {
     /**
-     * A basic test example.
+     * Test unauthenticated access to root redirects to login.
      *
      * @return void
      */
-    public function testBasicTest()
+    public function testRootRedirectsToLogin()
     {
         $response = $this->get('/');
+        $response->assertStatus(302);
+        $response->assertRedirect('/login');
+    }
 
-        $response->assertStatus(200);
+    /**
+     * Test unauthenticated access to dashboard redirects to login.
+     *
+     * @return void
+     */
+    public function testDashboardRequiresAuth()
+    {
+        $response = $this->get('/dashboard');
+        $response->assertStatus(302);
+        $response->assertRedirect('/login');
     }
 }
