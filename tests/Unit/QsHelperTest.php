@@ -2,7 +2,7 @@
 
 namespace Tests\Unit;
 
-use Tests\TestCase;
+use PHPUnit\Framework\TestCase;
 use App\Helpers\Qs;
 
 class QsHelperTest extends TestCase
