@@ -58,13 +58,17 @@ stages:
           }
 
           Write-Host "Running Unit & Functional Tests (PHPUnit)..."
-          docker run --rm `
-            -v "$(System.DefaultWorkingDirectory):/var/www/test-output" `
-            $(AcrName).azurecr.io/$(ImageName):$(Build.BuildId) `
-            php -d memory_limit=512M vendor/bin/phpunit --log-junit /var/www/test-output/test-results.xml
-          if ($LASTEXITCODE -ne 0) {
-              Write-Error "PHPUnit tests failed with exit code $LASTEXITCODE. Aborting push."
-              exit $LASTEXITCODE
+          $testContainer = "sms-test-$($Build.BuildId)"
+          docker create --name $testContainer $(AcrName).azurecr.io/$(ImageName):$(Build.BuildId)
+          docker start $testContainer
+          docker exec $testContainer phpunit --log-junit /var/www/test-results.xml
+          $testExitCode = $LASTEXITCODE
+          docker cp "$($testContainer):/var/www/test-results.xml" "$(System.DefaultWorkingDirectory)/test-results.xml"
+          docker rm -f $testContainer
+
+          if ($testExitCode -ne 0) {
+              Write-Error "PHPUnit tests failed with exit code $testExitCode. Aborting push."
+              exit $testExitCode
           }
           Write-Host "All Unit & Functional Tests passed successfully!"
 
