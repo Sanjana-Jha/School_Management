@@ -51,9 +51,9 @@ stages:
           az acr login --name $(AcrName)
 
           Write-Host "Cleaning up old Docker cache and dangling images on build agent..."
-          docker container prune -f 2>$null
-          docker image prune -f 2>$null
-          docker builder prune -f 2>$null
+          try { docker container prune -f 2>$null } catch {}
+          try { docker image prune -f 2>$null } catch {}
+          try { docker builder prune -f 2>$null } catch {}
 
           Write-Host "Building Docker image $(AcrName).azurecr.io/$(ImageName):$(Build.BuildId)..."
           docker build -t $(AcrName).azurecr.io/$(ImageName):$(Build.BuildId) -t $(AcrName).azurecr.io/$(ImageName):latest .
