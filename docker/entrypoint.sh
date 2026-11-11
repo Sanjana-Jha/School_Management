@@ -1,6 +1,11 @@
 #!/bin/sh
 set -e
 
+# If a custom command is provided (e.g. phpunit, sh, php artisan), execute it directly
+if [ "$#" -gt 0 ]; then
+    exec "$@"
+fi
+
 # Ensure Laravel storage directories exist with proper permissions
 mkdir -p /var/www/storage/framework/cache/data
 mkdir -p /var/www/storage/framework/sessions

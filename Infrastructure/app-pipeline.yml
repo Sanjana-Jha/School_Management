@@ -60,7 +60,7 @@ stages:
           Write-Host "Running Unit & Functional Tests (PHPUnit)..."
           $testContainer = "sms-test-$(Build.BuildId)"
           docker rm -f $testContainer 2>$null
-          docker run --name $testContainer $(AcrName).azurecr.io/$(ImageName):$(Build.BuildId) phpunit --log-junit /var/www/test-results.xml
+          docker run --name $testContainer --entrypoint phpunit $(AcrName).azurecr.io/$(ImageName):$(Build.BuildId) --log-junit /var/www/test-results.xml
           $testExitCode = $LASTEXITCODE
           docker cp "$($testContainer):/var/www/test-results.xml" "$(System.DefaultWorkingDirectory)/test-results.xml"
           docker rm -f $testContainer
