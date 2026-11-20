@@ -8,13 +8,50 @@ Homestead.json
 Homestead.yaml
 npm-debug.log
 yarn-error.log
+
+# Environment & Secrets
 .env
+.env.backup
+.env.production
+.env.local
+.env.*.local
+*.pem
+*.key
+*.cert
+*.crt
+*.pfx
+*.p12
+
+# Testing & Cache
 .phpunit.result.cache
 important
 _ide_helper.php
 storage
 .phpstorm.meta.php
 .editorconfig
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# IDEs and editors
+.vscode/
+*.sublime-project
+*.sublime-workspace
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Logs
+*.log
 
 # --- Terraform ---
 **/.terraform/
