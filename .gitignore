@@ -75,3 +75,7 @@ backend.hcl
 tfplan
 *.tfplan
 *.plan
+
+# Ignore local README
+README.md
+README_local_backup.md
